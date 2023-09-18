@@ -395,7 +395,7 @@ int main() {
 		// Execute FFT
 		fftw_execute(fftPlan);
 
-		// Analyze FFT results to find dominant frequency
+		// Find peak frequency
 		int peakIndex = 0;
 		double maxMagnitude = 0.0;
 
@@ -407,7 +407,6 @@ int main() {
 		    }
 		}
 
-		// Calculate frequency based on peak index
 		params.freq_ref = static_cast<float>(peakIndex) * params.freq_ref / fftDataSize;
 		//params.freq_slave = ;
 		

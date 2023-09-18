@@ -1,3 +1,6 @@
+// Generating sawtooth signal and reading data without fitting
+// Multithreading was tested but without a success
+
 //g++ -o transfer_interferometer_v2 transfer_interferometer_v2.cpp BCM2835_Driver.o ADS1256_Driver.o -lbcm2835 -lpthread
 
 #include <cstdio>
@@ -44,7 +47,6 @@ mutex mtx;
 #define MONITOR_SET_PHASE_REF 3
 #define MONITOR_RESIDUE_REF 4
 
-// Custom analog write function for MCP4728
 void analogWrite(uint8_t chan, uint16_t value) {
     uint8_t data[3];
 
@@ -68,7 +70,7 @@ void dacTask(const int* waveform, int startIndex, int batchSize) {
 }
 
 // Function to read from ADC
-void adcTask(std::vector<uint32_t>& adcReadings, int startIndex, int batchSize) {
+void adcTask(vector<uint32_t>& adcReadings, int startIndex, int batchSize) {
     for (int i = 0; i < batchSize; ++i) {
         uint32_t rword = ADS1256_Read_Word(false);
         mtx.lock(); // Lock the mutex before writing to shared data
@@ -98,7 +100,7 @@ int main() {
     // Set I2C clock speed (MCP4728 supports up to 3.4MHz)
     bcm2835_i2c_setClockDivider(300);
 	
-	// Create the sawtooth wave table
+    // Create the sawtooth wave table
     int tab1[StepsUp + StepsDown];
     int up = Amplitude / StepsUp;
     int down = Amplitude / StepsDown;
@@ -129,18 +131,18 @@ int main() {
     while (true) {
 	for (int batchStart = 0; batchStart < StepsUp + StepsDown; batchStart += batchSize) {
 	    int remainingSteps = StepsUp + StepsDown - batchStart;
-	    int currentBatchSize = std::min(batchSize, remainingSteps);
+	    int currentBatchSize = min(batchSize, remainingSteps);
 		
 	    // Create a vector to store ADC readings for the current batch
-	    std::vector<uint32_t> adcReadings(currentBatchSize);
+	    vector<uint32_t> adcReadings(currentBatchSize);
 	    // Create threads for DAC write and ADC read tasks
-	    std::thread dacThread(dacTask, tab1, batchStart, currentBatchSize);
-	    std::thread adcThread(adcTask, std::ref(adcReadings), batchStart, currentBatchSize);
+	    thread dacThread(dacTask, tab1, batchStart, currentBatchSize);
+	    thread adcThread(adcTask, ref(adcReadings), batchStart, currentBatchSize);
 
 	    // Wait for threads to finish
 	    dacThread.join();
 	    adcThread.join();
-	}
+		}
     }
 	
 	
@@ -149,4 +151,3 @@ int main() {
     
     return 0;
 }
-

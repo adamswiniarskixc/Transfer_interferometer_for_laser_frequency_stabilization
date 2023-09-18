@@ -570,28 +570,3 @@ int main() {
     
     return 0;
 }
-
-/*
-#include <iostream>
-#include <fstream> // Include the necessary header for file operations
-
-int main() {
-    // Open a file for writing
-    std::ofstream outFile("data.txt"); // This will create or overwrite the file named "data.txt"
-
-    if (outFile.is_open()) { // Check if the file was opened successfully
-        // Write data to the file
-        outFile << "Hello, world!" << std::endl;
-        outFile << 42 << std::endl;
-
-        // Close the file
-        outFile.close();
-        std::cout << "Data saved to file." << std::endl;
-    } else {
-        std::cerr << "Error opening the file." << std::endl;
-    }
-
-    return 0;
-}
-*/
-

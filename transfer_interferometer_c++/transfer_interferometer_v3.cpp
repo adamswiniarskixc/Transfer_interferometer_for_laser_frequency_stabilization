@@ -1,5 +1,3 @@
-//g++ -o transfer_interferometer_v3 transfer_interferometer_v3.cpp BCM2835_Driver.o ADS1256_Driver.o -lbcm2835 -lfftw3 -lm
-
 #include <cstdio>
 #include <iostream>
 #include <fstream>
@@ -22,6 +20,7 @@
 #include <vector>
 
 using namespace std;
+using namespace Eigen;
 
 // MCP4728 DAC address
 #define MCP4728_ADDRESS 0x60
@@ -38,10 +37,6 @@ using namespace std;
 // Number of steps for the sawtooth waveform
 #define STEPS_UP 50
 #define STEPS_DOWN 20
-
-// Number of steps to skip
-#define SKIP_LEFT 10
-#define SKIP_RIGHT 10
 
 #define PI M_PI
 #define PI2 2*M_PI
@@ -111,6 +106,14 @@ int in0_array2[STEPS_UP];
 
 int in0_buffer;
 
+int in1_array[STEPS_UP];
+int in1_array2[STEPS_UP];
+
+// Number of steps to skip
+const int SKIP_LEFT = 10;
+const int SKIP_RIGHT = 10;
+const int STEPS_USE = STEPS_UP - SKIP_LEFT - SKIP_RIGHT;
+
 // 2 matrices, one for each wavelength, each of size 2xSTEPS_UP
 float estimation_matrix[2*2*STEPS_UP];
 
@@ -157,34 +160,73 @@ void evaluate_sin_cos() {
     p_slave_set[1] = cos(params.set_phase_slave);
 }
 
+
+double get_fit_freq(int array[], int arraySize, int SKIP_LEFT, int STEPS_USE) {
+    vector<double> in_array(array, array + arraySize);
+    
+    int dataSize = STEPS_USE;
+
+    // Perform FFTW setup
+    fftw_complex* in = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * dataSize);
+    fftw_complex* out = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * dataSize);
+    fftw_plan plan = fftw_plan_dft_1d(dataSize, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+
+    for (int i = 0; i < dataSize; ++i) {
+        in[i][0] = in_array[SKIP_LEFT + i];
+        in[i][1] = 0.0;
+    }
+
+    // Execute FFT
+    fftw_execute(plan);
+
+    double SampleRate = 1.0;  // You can modify this if your actual sampling rate is different
+
+    // Calculate frequency bins
+    double* fft_freqs = new double[dataSize];
+    for (int i = 0; i < dataSize; ++i) {
+        fft_freqs[i] = i * SampleRate / dataSize;
+    }
+
+    // Find the index of the maximum magnitude in the spectrum
+    int max_magnitude_index = 0;
+    for (int i = 1; i < dataSize/2; ++i) {
+        if (abs(out[i][0]) > abs(out[max_magnitude_index][0])) {
+            max_magnitude_index = i;
+        }
+    }
+
+    double peak_frequency = fft_freqs[max_magnitude_index];
+
+    // Clean up FFTW resources
+    fftw_destroy_plan(plan);
+    fftw_free(in);
+    fftw_free(out);
+    delete[] fft_freqs;
+
+    return peak_frequency;
+}
+
 vector<float> get_fitting_matrix(int n_steps, float fit_freq, int skip_left = 10, int skip_right = 10) {
     // steps to use
     int n_use = n_steps - skip_left - skip_right;
 
-    Eigen::MatrixXf D(n_use, 3);
+    MatrixXf D(n_use, 3);
     for (int i = skip_left; i < n_steps-skip_right; ++i) {
         float time = static_cast<float>(i);
-        float sin_t = sin(PI2 * time / n_steps * fit_freq);
-        float cos_t = cos(PI2 * time / n_steps * fit_freq);
-        D(i - skip_left - skip_right, 0) = sin_t;
-        D(i - skip_left - skip_right, 1) = cos_t;
-        D(i - skip_left - skip_right, 2) = 1.0f;
+        float theta = PI2 * time / n_steps * fit_freq;
+        D(i - skip_left, 0) = sin(theta);
+        D(i - skip_left, 1) = cos(theta);
+        D(i - skip_left, 2) = 1.0f;
     }
 
-    Eigen::MatrixXf DTD = D.transpose() * D;
-    Eigen::MatrixXf compute_matrix = (DTD.inverse() * D.transpose()).block(0, 0, 2, n_use);
+    MatrixXf DTD = D.transpose() * D;
+    MatrixXf compute_matrix = (DTD.inverse() * D.transpose()).block(0, 0, 2, n_use);
 
-    vector<float> flattened_array;
-    flattened_array.reserve(2 * n_steps);
-
-    for (int i = 0; i < n_steps; ++i) {
-        flattened_array.push_back(0.0f);
-        flattened_array.push_back(0.0f);
-    }
+    vector<float> flattened_array(2 * n_steps, 0.0f);
 
     for (int i = skip_left; i < n_steps - skip_right; ++i) {
-        flattened_array[i]  = compute_matrix(0, i);
-        flattened_array[n_steps + i] = compute_matrix(1, i);
+        flattened_array[i]  = compute_matrix(0, i-skip_left);
+        flattened_array[n_steps + i] = compute_matrix(1, i-skip_left);
     }
 
     return flattened_array;
@@ -220,7 +262,7 @@ double get_phase_difference(float *p_act, float *p_set) {
     return atan2(sinp, cosp);
 }
 
-// Custom analog write function for MCP4728
+// Analog write function for MCP4728
 void analogWrite(uint8_t chan, uint16_t value) {
     uint8_t data[3];
 
@@ -321,12 +363,6 @@ int main() {
     params.freq_ref = 2.2; // to be calculated using fft
     params.freq_slave = 2.2/(852/767);
 
-//**************************    
-    // Collect data for FFT
-    const int fftDataSize = STEPS_UP - SKIP_LEFT - SKIP_RIGHT;
-    double fftInput[fftDataSize];
-//**************************
-
     params.set_phase_ref = 0.0;
     params.set_phase_slave = 0.0;
     
@@ -340,6 +376,7 @@ int main() {
     for (int i=0; i < STEPS_UP; i++)
     {
 	in0_array[i] = ZEROV;
+	in1_array[i] = ZEROV;
     }
     
     ramp_direction = true;
@@ -354,7 +391,7 @@ int main() {
     
     out1_pid = 0;
     
-    ofstream outFile("test_data.txt");
+    //ofstream outFile("test_data.txt");
     
     while (!Exit) {
 	ADS1256_Set_Channel_Differential(ADS1256_AIN1, ADS1256_AIN0);
@@ -365,10 +402,14 @@ int main() {
 	in1 = ADS1256_Read_Word(false);
 	
 	if (ramp_direction) {
-	    if (in0_buffer)
+	    if (in0_buffer) {
 		in0_array2[cycle_up] = in0;
-	    else
+		in1_array2[cycle_up] = in1;
+	    }
+	    else {
 		in0_array[cycle_up] = in0;
+		in1_array[cycle_up] = in1;
+	    }
 		
 	    p_ref[0] += estimation_matrix[cycle_up]*((float)in0);
 	    p_ref[1] += estimation_matrix[cycle_up+STEPS_UP]*((float)in0);
@@ -383,40 +424,11 @@ int main() {
 	    if (cycle_up == STEPS_UP)
 	    {
 		// ********************************************************
-		// Perform FFT
-		fftw_complex* fftOutput = reinterpret_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * fftDataSize));
-		fftw_plan fftPlan = fftw_plan_dft_r2c_1d(fftDataSize, fftInput, fftOutput, FFTW_ESTIMATE);
-
-		// Copy data to FFT input buffer
-		for (int i = 0; i < fftDataSize; ++i) {
-		    fftInput[i] = in0_array[SKIP_LEFT + i];
-		}
-
-		// Execute FFT
-		fftw_execute(fftPlan);
-
-		// Find peak frequency
-		int peakIndex = 0;
-		double maxMagnitude = 0.0;
-
-		for (int i = 0; i < fftDataSize / 2; ++i) {
-		    double magnitude = sqrt(fftOutput[i][0] * fftOutput[i][0] + fftOutput[i][1] * fftOutput[i][1]);
-		    if (magnitude > maxMagnitude) {
-			maxMagnitude = magnitude;
-			peakIndex = i;
-		    }
-		}
-
-		params.freq_ref = static_cast<float>(peakIndex) * params.freq_ref / fftDataSize;
-		//params.freq_slave = ;
+		// Find reference and slave fit frequencies
+		params.freq_ref = get_fit_freq(in0_array, sizeof(in0_array) / sizeof(in0_array[0]), SKIP_LEFT, STEPS_USE);
+		params.freq_slave = get_fit_freq(in1_array, sizeof(in1_array) / sizeof(in1_array[0]), SKIP_LEFT, STEPS_USE);
 		
-		outFile << params.freq_ref << endl;
-		
-		// Clean up FFT resources
-		fftw_destroy_plan(fftPlan);
-		fftw_free(fftOutput);
-		
-		// ********************************************************
+		//outFile << params.freq_ref << endl;
 		
 		freq_ratio = params.freq_slave / params.freq_ref;
 		
@@ -560,10 +572,8 @@ int main() {
 	analogWrite(4, out2); // channel 2
     }
     
-    outFile.close();
+    //outFile.close();
     
-    
-	
     bcm2835_i2c_end();
     bcm2835_close();
     

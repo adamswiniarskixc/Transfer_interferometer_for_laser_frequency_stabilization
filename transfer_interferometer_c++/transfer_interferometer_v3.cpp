@@ -1,3 +1,5 @@
+//g++ -o transfer_interferometer_v3 transfer_interferometer_v3.cpp BCM2835_Driver.o ADS1256_Driver.o -lbcm2835 -lfftw3 -lm
+
 #include <cstdio>
 #include <iostream>
 #include <fstream>
@@ -332,8 +334,6 @@ int main() {
     
     params.ramp_amplitude = Amplitude;
     
-    /*
-    
     ramp_step_up = static_cast<int>(static_cast<float>(params.ramp_amplitude) / static_cast<float>(STEPS_UP));
     ramp_step_down = static_cast<int>(static_cast<float>(params.ramp_amplitude) / static_cast<float>(STEPS_DOWN));
 
@@ -347,7 +347,6 @@ int main() {
         tab[i + STEPS_UP] = Amplitude - i * ramp_step_down;
     }
     
-    */
     
     params.gain_p_ref = 100.;
     params.gain_i_ref = 200.;
@@ -418,8 +417,8 @@ int main() {
 	    p_slave[1] += estimation_matrix[cycle_up+3*STEPS_UP]*((float)in1);
 	    
 	    cycle_up += 1;
-	    ramp_offset += ramp_step_up;
-	    //ramp_offset = tab[cycle_up-1];
+	    //ramp_offset += ramp_step_up;
+	    ramp_offset = tab[cycle_up-1];
 	    
 	    if (cycle_up == STEPS_UP)
 	    {
@@ -522,8 +521,8 @@ int main() {
 	else {
 	    // we are cycling down
 	    cycle_down += 1;
-	    //ramp_offset = tab[STEPS_UP + cycle_down-1];
-	    ramp_offset -=ramp_step_down;
+	    ramp_offset = tab[STEPS_UP + cycle_down-1];
+	    //ramp_offset -=ramp_step_down;
 	    
 	    if (cycle_down == STEPS_DOWN) {
 		cycle_down = 0;
@@ -574,6 +573,8 @@ int main() {
     
     //outFile.close();
     
+    
+	
     bcm2835_i2c_end();
     bcm2835_close();
     

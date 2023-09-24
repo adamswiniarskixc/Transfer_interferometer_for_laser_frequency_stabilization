@@ -49,6 +49,13 @@ time_, signal = generate_signal(amplitude, freq, duration, sampling_rate, noise_
 time_ = x
 signal = V1
 
+skip_left = 500
+skip_right = 100
+steps = len(signal)
+
+print('Number of points: ', steps - skip_left - skip_right)
+
+start = time.perf_counter()
 # Perform FFT
 fft_result = np.fft.fft(signal)
 fft_freqs = np.fft.fftfreq(len(signal), d=1/len(time_))
@@ -60,22 +67,18 @@ max_magnitude_index = np.argmax(magnitude_spectrum)
 # Find the corresponding frequency
 peak_frequency = fft_freqs[max_magnitude_index]
 
-print("Peak Frequency from FFT:", peak_frequency)
-
-skip_left = 500
-skip_right = 100
-steps = len(signal)
 fit_freq = peak_frequency
 
 sin_t = np.sin(2*np.pi*time_/steps*fit_freq)
 cos_t = np.cos(2*np.pi*time_/steps*fit_freq)
 
-start = time.time()
 a = get_fitting_matrix(steps, fit_freq, skip_left, skip_right)
 amp_sin = np.sum(a[:steps]*signal)
 amp_cos = np.sum(a[steps:]*signal)
-end = time.time()
-print('computation time: ', end - start, ' s')
+end = time.perf_counter()
+
+print("Peak Frequency from FFT:", peak_frequency)
+print('computation time: ', (end - start)*1000000, ' us')
 
 # Plot the signal and the FFT magnitude spectrum
 plt.subplot(2, 1, 1)

@@ -181,7 +181,7 @@ double get_fit_freq(int array[], int arraySize, int SKIP_LEFT, int STEPS_USE) {
     // Execute FFT
     fftw_execute(plan);
 
-    double SampleRate = 1.0;  // You can modify this if your actual sampling rate is different
+    double SampleRate = 1.0;  // sampling rate
 
     // Calculate frequency bins
     double* fft_freqs = new double[dataSize];

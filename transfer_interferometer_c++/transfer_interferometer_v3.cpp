@@ -164,7 +164,6 @@ void evaluate_sin_cos() {
 
 
 double get_fit_freq(int array[], int arraySize, int SKIP_LEFT, int STEPS_USE) {
-    vector<double> in_array(array, array + arraySize);
     
     int dataSize = STEPS_USE;
 
@@ -174,7 +173,7 @@ double get_fit_freq(int array[], int arraySize, int SKIP_LEFT, int STEPS_USE) {
     fftw_plan plan = fftw_plan_dft_1d(dataSize, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
 
     for (int i = 0; i < dataSize; ++i) {
-        in[i][0] = in_array[SKIP_LEFT + i];
+        in[i][0] = array[SKIP_LEFT + i];
         in[i][1] = 0.0;
     }
 
@@ -183,13 +182,13 @@ double get_fit_freq(int array[], int arraySize, int SKIP_LEFT, int STEPS_USE) {
 
     double SampleRate = 1.0;  // sampling rate
 
-    // Calculate frequency bins
+    // Frequency bins
     double* fft_freqs = new double[dataSize];
     for (int i = 0; i < dataSize; ++i) {
         fft_freqs[i] = i * SampleRate / dataSize;
     }
 
-    // Find the index of the maximum magnitude in the spectrum
+    // The index of the maximum magnitude in the spectrum
     int max_magnitude_index = 0;
     for (int i = 1; i < dataSize/2; ++i) {
         if (abs(out[i][0]) > abs(out[max_magnitude_index][0])) {
@@ -283,7 +282,7 @@ void analogWrite(uint8_t chan, uint16_t value) {
 bool Exit = false; // Global flag variable to exit the program
 
 void exit_handler(int signum) {
-    (void)signum; // To suppress the unused parameter warning
+    (void)signum; // To suppress unused parameter warnings
     bcm2835_i2c_end();
     BCM2835_GPIO_Exit();
     bcm2835_close();
@@ -337,7 +336,7 @@ int main() {
     ramp_step_up = static_cast<int>(static_cast<float>(params.ramp_amplitude) / static_cast<float>(STEPS_UP));
     ramp_step_down = static_cast<int>(static_cast<float>(params.ramp_amplitude) / static_cast<float>(STEPS_DOWN));
 
-    // Create the sawtooth wave table
+    // The sawtooth wave table
     int tab[STEPS_UP + STEPS_DOWN];
     
     for (int i = 0; i < STEPS_UP; ++i) {
@@ -346,7 +345,6 @@ int main() {
     for (int i = 0; i < STEPS_DOWN; ++i) {
         tab[i + STEPS_UP] = Amplitude - i * ramp_step_down;
     }
-    
     
     params.gain_p_ref = 100.;
     params.gain_i_ref = 200.;
@@ -572,9 +570,7 @@ int main() {
     }
     
     //outFile.close();
-    
-    
-	
+    	
     bcm2835_i2c_end();
     bcm2835_close();
     

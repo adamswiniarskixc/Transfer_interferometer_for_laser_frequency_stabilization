@@ -9,31 +9,30 @@ from multiprocessing import Process, Queue
 
 GPIO.setwarnings(False)
 
-# Initialize MCP4728
+# MCP4728 initialization
 i2c = board.I2C()   # uses board.SCL and board.SDA
 dac = adafruit_mcp4728.MCP4728(i2c)
 
-# ADS1256 pin definitions
+# ADS1256 pins
 RST_PIN = 18
 CS_PIN = 22
 DRDY_PIN = 8
 
-# Initialize ADS1256 ADC
+# ADS1256 initialization
 ADC = ADS1256.ADS1256()
 
-# Set ADC gain and data rate
 gain = ADS1256.ADS1256_GAIN_E['ADS1256_GAIN_1']
 drate = ADS1256.ADS1256_DRATE_E['ADS1256_30000SPS']
 
-# Set ADC channel to read
+# ADC channel to read
 channel = 0
 
-# Initialize GPIO
+# GPIO initialization
 GPIO.setmode(GPIO.BCM)
 config.module_init()  # Initialize the config module
 GPIO.setup(DRDY_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-# Initialize ADS1256 ADC
+# ADS1256 setup
 ADC.ADS1256_reset()
 ADC.ADS1256_ConfigADC(gain, drate)
 
@@ -71,7 +70,7 @@ steps_down = 20  # ramp down
 tab1 = range(0, Amplitude, int(Amplitude/steps_up))
 tab2 = range(Amplitude, 0, -int(Amplitude/steps_down))
 
-# Create a queue for inter-process communication
+# Queue for reading the signal using ADC
 value_queue = Queue()
 
 def read_value(queue):
@@ -80,7 +79,6 @@ def read_value(queue):
         queue.put(value)
         print(value)
 
-# Start the value reading process
 value_process = Process(target=read_value, args=(value_queue,))
 value_process.start()
 
@@ -94,5 +92,4 @@ while True:
     for i in tab2:
         dac.channel_a.value = i
 
-# Terminate the value reading process
 value_process.terminate()

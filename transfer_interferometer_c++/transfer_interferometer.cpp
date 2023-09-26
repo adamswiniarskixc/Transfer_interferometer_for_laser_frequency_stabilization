@@ -96,7 +96,7 @@ int main() {
     uint32_t rword;
     double voltage;
     
-    // Open a file for writing
+	// file for tests
     ofstream outFile("test_data.txt");
     	
     while (true) {
